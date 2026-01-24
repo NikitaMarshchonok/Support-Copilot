@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import re
 from typing import Any
 
 from openai import OpenAI
@@ -93,6 +94,31 @@ def _normalize_actions(items: list[Any]) -> list[str]:
             if s:
                 out.append(s)
     return out
+
+
+def _normalize_draft(value: Any) -> str:
+    if isinstance(value, dict):
+        for key in ("draft_reply", "text", "reply", "answer"):
+            if key in value and str(value[key]).strip():
+                return str(value[key]).strip()
+        return ""
+    if isinstance(value, list):
+        return " ".join(str(v).strip() for v in value if str(v).strip())
+    return str(value).strip()
+
+
+def _clean_snippet(text: str, limit: int = 260) -> str:
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    cleaned: list[str] = []
+    for line in lines:
+        line = re.sub(r"^#{1,6}\s*", "", line)
+        line = re.sub(r"^[-*]\s+", "", line)
+        line = re.sub(r"^\d+\.\s+", "", line)
+        cleaned.append(line)
+    joined = " ".join(cleaned).strip()
+    if len(joined) > limit:
+        return joined[:limit] + "…"
+    return joined
 
 
 def _confidence_from_score(score: float) -> float:
@@ -187,7 +213,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
     citations: list[Citation] = []
     for p in hits_payloads[:4]:
         text = (p.get("text") or "").strip()
-        snippet = (text[:260] + "…") if len(text) > 260 else text
+        snippet = _clean_snippet(text)
         citations.append(
             Citation(
                 title=str(p.get("title") or "Policy")[:200],
@@ -216,7 +242,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
             try:
                 raw = _ollama_generate(prompt)
                 parsed = _extract_json(raw) or {}
-                draft = str(parsed.get("draft_reply") or "").strip()
+                draft = _normalize_draft(parsed.get("draft_reply") or parsed.get("text") or parsed)
                 next_actions = _normalize_actions(parsed.get("next_actions") or [])
                 clarifying = _normalize_actions(parsed.get("clarifying_questions") or [])
                 lang = str(parsed.get("language") or language)
