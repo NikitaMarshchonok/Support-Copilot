@@ -47,6 +47,23 @@ def _ollama_embedding(text: str) -> list[float]:
     return list(data.get("embedding") or [])
 
 
+def _get_existing_vector_size(client) -> int | None:
+    try:
+        info = client.get_collection(settings.qdrant_collection)
+    except Exception:
+        return None
+    vectors = getattr(info.config.params, "vectors", None)
+    if vectors is None:
+        return None
+    size = getattr(vectors, "size", None)
+    if isinstance(size, int):
+        return size
+    if isinstance(vectors, dict):
+        first = next(iter(vectors.values()), None)
+        return getattr(first, "size", None)
+    return None
+
+
 def chunk_text(text: str, chunk_size: int, overlap: int) -> list[str]:
     text = text.replace("\r\n", "\n")
     if len(text) <= chunk_size:
@@ -116,6 +133,9 @@ def main():
 
             if sample_emb_dim is None:
                 sample_emb_dim = len(emb)
+                existing_size = _get_existing_vector_size(qdrant)
+                if existing_size and existing_size != sample_emb_dim:
+                    qdrant.delete_collection(collection_name=settings.qdrant_collection)
                 ensure_collection(qdrant, settings.qdrant_collection, vector_size=sample_emb_dim)
 
             payload = {

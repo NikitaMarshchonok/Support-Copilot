@@ -72,6 +72,25 @@ def _extract_json(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _normalize_actions(items: list[Any]) -> list[str]:
+    out: list[str] = []
+    for it in items:
+        if isinstance(it, dict):
+            action = str(it.get("action") or it.get("title") or "").strip()
+            desc = str(it.get("description") or "").strip()
+            if action and desc:
+                out.append(f"{action} — {desc}")
+            elif action:
+                out.append(action)
+            elif desc:
+                out.append(desc)
+        else:
+            s = str(it).strip()
+            if s:
+                out.append(s)
+    return out
+
+
 def _confidence_from_score(score: float) -> float:
     """
     Qdrant cosine score often in [0..1] range.
@@ -193,8 +212,8 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
                 raw = _ollama_generate(prompt)
                 parsed = _extract_json(raw) or {}
                 draft = str(parsed.get("draft_reply") or "").strip()
-                next_actions = parsed.get("next_actions") or []
-                clarifying = parsed.get("clarifying_questions") or []
+                next_actions = _normalize_actions(parsed.get("next_actions") or [])
+                clarifying = _normalize_actions(parsed.get("clarifying_questions") or [])
                 lang = str(parsed.get("language") or language)
             except requests.RequestException:
                 draft = ""
@@ -225,8 +244,8 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         return SuggestReplyResponse(
             draft_reply=draft,
             citations=citations,
-            next_actions=[str(a).strip() for a in next_actions if str(a).strip()][:8],
-            clarifying_questions=[str(q).strip() for q in clarifying if str(q).strip()][:6],
+            next_actions=_normalize_actions(next_actions)[:8],
+            clarifying_questions=_normalize_actions(clarifying)[:6],
             confidence=conf,
             language=lang,
             debug={
