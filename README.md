@@ -1,0 +1,49 @@
+# Support Copilot (RAG MVP)
+
+RAG демо для саппорта: FastAPI + Qdrant + Streamlit + OpenAI.
+
+## Быстрый запуск (5 команд)
+```bash
+# 1) Поднять Qdrant
+docker compose -f infra/docker-compose.yml up -d
+
+# 2) Виртуальное окружение + зависимости
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+
+# 3) env
+cp .env.example .env
+# OpenAI ключ не обязателен — можно запустить локально через Ollama
+
+# 4) Индексация KB
+python scripts/ingest_kb.py
+
+# 5) Запуск API + UI
+PYTHONPATH=. uvicorn apps.api.app.main:app --reload --port 8000
+streamlit run apps/ui/app.py --server.port 8501
+```
+
+## Проверка без UI
+```bash
+curl http://localhost:8000/health
+
+curl -X POST http://localhost:8000/suggest-reply \
+  -H "Content-Type: application/json" \
+  -d '{"ticket_text":"I want to cancel due to illness. Can I get a refund?","language":"en","category":"cancellation"}'
+```
+
+## Структура
+```
+apps/api/app     # FastAPI + RAG
+apps/ui          # Streamlit UI
+infra            # docker-compose (Qdrant)
+scripts          # ingest_kb.py
+data/kb          # knowledge base (создается при ingest)
+```
+
+## Примечания
+- Если Qdrant недоступен, проверьте контейнер: `docker ps`.
+- Если используете VS Code: откройте папку проекта и запускайте команды в терминале внутри IDE.
+ - Локально/бесплатно: установите Ollama и запустите модели:
+   - `ollama pull llama3.1`
+   - `ollama pull nomic-embed-text`
