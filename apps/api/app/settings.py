@@ -7,6 +7,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
+    # Provider: openai | ollama | mock
+    llm_provider: str = Field(default="openai", validation_alias="LLM_PROVIDER")
+
     # OpenAI
     openai_api_key: str = Field(validation_alias="OPENAI_API_KEY")
     openai_model: str = Field(default="gpt-4o-mini", validation_alias="OPENAI_MODEL")

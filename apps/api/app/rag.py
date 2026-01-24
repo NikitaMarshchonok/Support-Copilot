@@ -31,6 +31,10 @@ def _has_openai_key() -> bool:
     return bool(key) and key != "YOUR_KEY_HERE"
 
 
+def _provider() -> str:
+    return (settings.llm_provider or "openai").strip().lower()
+
+
 def _mock_embedding(text: str, dim: int = MOCK_EMBEDDING_DIM) -> list[float]:
     seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
     rng = random.Random(seed)
@@ -129,8 +133,9 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
 
     # Clients
     qdrant = get_qdrant(settings.qdrant_url)
-    use_openai = _has_openai_key()
-    use_ollama = not use_openai and bool(settings.ollama_url)
+    provider = _provider()
+    use_openai = provider == "openai" and _has_openai_key()
+    use_ollama = provider == "ollama" and bool(settings.ollama_url)
     llm = OpenAI(api_key=settings.openai_api_key) if use_openai else None
 
     # 1) Embed query

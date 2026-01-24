@@ -13,7 +13,7 @@ pip install -r requirements.txt
 
 # 3) env
 cp .env.example .env
-# OpenAI ключ не обязателен — можно запустить локально через Ollama
+# Выберите провайдер в .env: LLM_PROVIDER=openai|ollama|mock
 
 # 4) Индексация KB
 python scripts/ingest_kb.py
@@ -44,6 +44,7 @@ data/kb          # knowledge base (создается при ingest)
 ## Примечания
 - Если Qdrant недоступен, проверьте контейнер: `docker ps`.
 - Если используете VS Code: откройте папку проекта и запускайте команды в терминале внутри IDE.
- - Локально/бесплатно: установите Ollama и запустите модели:
+ - Локально/бесплатно (Ollama): `LLM_PROVIDER=ollama`, затем:
    - `ollama pull llama3.1`
    - `ollama pull nomic-embed-text`
+ - Без моделей (mock): `LLM_PROVIDER=mock` (генерация без LLM)
