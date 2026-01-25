@@ -7,7 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter
 
 from .schemas import SuggestReplyRequest, SuggestReplyResponse, FeedbackRequest
-from .rag import generate_suggested_reply
+from .rag import generate_suggested_reply, get_active_provider_model
 from .settings import settings
 
 
@@ -16,7 +16,13 @@ router = APIRouter()
 
 @router.get("/health")
 def health():
-    return {"status": "ok", "collection": settings.qdrant_collection, "model": settings.openai_model}
+    provider, model = get_active_provider_model()
+    return {
+        "status": "ok",
+        "collection": settings.qdrant_collection,
+        "provider": provider,
+        "model": model,
+    }
 
 
 @router.post("/suggest-reply", response_model=SuggestReplyResponse)

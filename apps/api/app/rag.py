@@ -36,6 +36,17 @@ def _provider() -> str:
     return (settings.llm_provider or "openai").strip().lower()
 
 
+def get_active_provider_model() -> tuple[str, str | None]:
+    provider = _provider()
+    use_openai = provider == "openai" and _has_openai_key()
+    use_ollama = provider == "ollama" and bool(settings.ollama_url)
+    if use_openai:
+        return "openai", settings.openai_model
+    if use_ollama:
+        return "ollama", settings.ollama_model
+    return "mock", None
+
+
 def _mock_embedding(text: str, dim: int = MOCK_EMBEDDING_DIM) -> list[float]:
     seed = int.from_bytes(hashlib.sha256(text.encode("utf-8")).digest()[:8], "big")
     rng = random.Random(seed)
