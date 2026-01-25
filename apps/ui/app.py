@@ -9,12 +9,51 @@ st.set_page_config(page_title="Support Copilot", layout="wide")
 st.title("🧠 Support Copilot (MVP)")
 st.caption("Ticket → Draft reply + citations (RAG) + next actions")
 
+DEMO_SCENARIOS = {
+    "Refund within policy": {
+        "ticket_text": (
+            "Hi, I booked a stay for March 12–15 but had to cancel today. "
+            "Can I get a full refund?\nReservation: 884512"
+        ),
+        "language": "en",
+        "category": "refunds",
+    },
+    "Price mismatch claim": {
+        "ticket_text": (
+            "I booked this apartment yesterday, but now I see a lower price for the same dates. "
+            "Can you match it?\nBooking ID: 992341"
+        ),
+        "language": "en",
+        "category": "payments",
+    },
+    "Date change request": {
+        "ticket_text": (
+            "My flight was moved. I need to change my stay from Apr 6–9 to Apr 8–11. "
+            "Is that possible?\nReservation 553210."
+        ),
+        "language": "en",
+        "category": "policies",
+    },
+}
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    ticket_text = st.text_area("Ticket text", height=260, placeholder="Paste a customer message here...")
-    language = st.selectbox("Language", ["en", "ru", "he"], index=0)
-    category = st.text_input("Category (optional)", value="")
+    demo_name = st.selectbox("Demo scenarios", ["(none)"] + list(DEMO_SCENARIOS.keys()))
+    if st.button("Load scenario", disabled=(demo_name == "(none)")):
+        demo = DEMO_SCENARIOS[demo_name]
+        st.session_state["ticket_text"] = demo["ticket_text"]
+        st.session_state["language"] = demo["language"]
+        st.session_state["category"] = demo["category"]
+
+    ticket_text = st.text_area(
+        "Ticket text",
+        key="ticket_text",
+        height=260,
+        placeholder="Paste a customer message here...",
+    )
+    language = st.selectbox("Language", ["en", "ru", "he"], index=0, key="language")
+    category = st.text_input("Category (optional)", value="", key="category")
     if st.button("Generate", type="primary", disabled=(len(ticket_text.strip()) < 3)):
         with st.spinner("Thinking..."):
             r = requests.post(

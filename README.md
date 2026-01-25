@@ -32,6 +32,12 @@ curl -X POST http://localhost:8000/suggest-reply \
   -d '{"ticket_text":"I want to cancel due to illness. Can I get a refund?","language":"en","category":"cancellation"}'
 ```
 
+## Demo flow
+- Запустите сервисы и UI (см. быстрый запуск)
+- В UI выберите **Demo scenarios → Load scenario**
+- Нажмите **Generate** и покажите Draft reply + Citations + Next actions
+- Готовые тексты сценариев: `DEMO_PACK.md`
+
 ## Структура
 ```
 apps/api/app     # FastAPI + RAG
