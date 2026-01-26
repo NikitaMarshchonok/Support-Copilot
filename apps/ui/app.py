@@ -1,13 +1,10 @@
 import json
 import os
 import textwrap
-from io import BytesIO
 from pathlib import Path
 
 import requests
 import streamlit as st
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
@@ -73,22 +70,64 @@ def _build_export_markdown(resp: dict) -> str:
 
 
 def _build_export_pdf(markdown_text: str) -> bytes:
-    buffer = BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=letter)
-    width, height = letter
-    x = 72
-    y = height - 72
+    def esc(text: str) -> str:
+        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    lines: list[str] = []
     for raw_line in markdown_text.splitlines():
         line = raw_line.replace("#", "").strip()
         wrapped = textwrap.wrap(line, width=95) or [""]
-        for wline in wrapped:
-            pdf.drawString(x, y, wline)
-            y -= 14
-            if y < 72:
-                pdf.showPage()
-                y = height - 72
-    pdf.save()
-    return buffer.getvalue()
+        lines.extend(wrapped)
+
+    lines_per_page = 48
+    pages = [lines[i : i + lines_per_page] for i in range(0, len(lines), lines_per_page)] or [[]]
+
+    obj: dict[int, bytes] = {}
+    obj[3] = b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"
+
+    page_ids: list[int] = []
+    for i, page_lines in enumerate(pages):
+        content_id = 4 + i * 2
+        page_id = 5 + i * 2
+
+        content = ["BT", "/F1 11 Tf", "72 720 Td", "12 TL"]
+        for line in page_lines:
+            content.append(f"({esc(line)}) Tj")
+            content.append("T*")
+        content.append("ET")
+        stream = "\n".join(content)
+        obj[content_id] = (
+            f"<< /Length {len(stream.encode('utf-8'))} >>\nstream\n{stream}\nendstream".encode("utf-8")
+        )
+        obj[page_id] = (
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>"
+        ).encode("utf-8")
+        page_ids.append(page_id)
+
+    kids = " ".join(f"{pid} 0 R" for pid in page_ids)
+    obj[2] = f"<< /Type /Pages /Kids [ {kids} ] /Count {len(page_ids)} >>".encode("utf-8")
+    obj[1] = b"<< /Type /Catalog /Pages 2 0 R >>"
+
+    max_id = max(obj.keys())
+    xref_positions: list[int] = []
+    pdf = bytearray()
+    pdf.extend(b"%PDF-1.4\n")
+    for i in range(1, max_id + 1):
+        xref_positions.append(len(pdf))
+        pdf.extend(f"{i} 0 obj\n".encode("utf-8"))
+        pdf.extend(obj.get(i, b"<<>>"))
+        pdf.extend(b"\nendobj\n")
+
+    xref_start = len(pdf)
+    pdf.extend(f"xref\n0 {max_id + 1}\n".encode("utf-8"))
+    pdf.extend(b"0000000000 65535 f \n")
+    for pos in xref_positions:
+        pdf.extend(f"{pos:010d} 00000 n \n".encode("utf-8"))
+    pdf.extend(
+        f"trailer\n<< /Size {max_id + 1} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF".encode("utf-8")
+    )
+    return bytes(pdf)
 
 
 def _read_history(limit: int = 8) -> list[dict]:

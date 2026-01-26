@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 data/feedback/*.jsonl
 .ipynb_checkpoints/
+data/history/*.jsonl
