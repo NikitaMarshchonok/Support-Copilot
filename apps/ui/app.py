@@ -1,6 +1,13 @@
+import json
 import os
+import textwrap
+from io import BytesIO
+from pathlib import Path
+
 import requests
 import streamlit as st
+from reportlab.lib.pagesizes import letter
+from reportlab.pdfgen import canvas
 
 API_URL = os.getenv("API_URL", "http://localhost:8000")
 
@@ -35,6 +42,66 @@ DEMO_SCENARIOS = {
         "category": "policies",
     },
 }
+
+
+def _build_export_markdown(resp: dict) -> str:
+    citations = resp.get("citations", [])
+    lines = [
+        "# Support Copilot Reply",
+        "",
+        "## Draft reply",
+        resp.get("draft_reply", ""),
+        "",
+        "## Next actions",
+    ]
+    for a in resp.get("next_actions", []):
+        lines.append(f"- {a}")
+    lines += ["", "## Clarifying questions"]
+    for q in resp.get("clarifying_questions", []):
+        lines.append(f"- {q}")
+    lines += ["", "## Citations"]
+    for c in citations:
+        title = c.get("title", "Policy")
+        url = c.get("url")
+        snippet = c.get("snippet", "")
+        lines.append(f"- **{title}**")
+        if url:
+            lines.append(f"  - {url}")
+        if snippet:
+            lines.append(f"  - _{snippet}_")
+    return "\n".join(lines).strip() + "\n"
+
+
+def _build_export_pdf(markdown_text: str) -> bytes:
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+    x = 72
+    y = height - 72
+    for raw_line in markdown_text.splitlines():
+        line = raw_line.replace("#", "").strip()
+        wrapped = textwrap.wrap(line, width=95) or [""]
+        for wline in wrapped:
+            pdf.drawString(x, y, wline)
+            y -= 14
+            if y < 72:
+                pdf.showPage()
+                y = height - 72
+    pdf.save()
+    return buffer.getvalue()
+
+
+def _read_history(limit: int = 8) -> list[dict]:
+    path = Path("data/history/history.jsonl")
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
 
 col1, col2 = st.columns([1, 1])
 
@@ -104,3 +171,27 @@ with col2:
                 timeout=30,
             )
             st.success("Saved feedback ✅")
+
+        st.subheader("Export")
+        export_md = _build_export_markdown(resp)
+        st.download_button(
+            "Download Markdown",
+            data=export_md,
+            file_name="support_copilot_reply.md",
+            mime="text/markdown",
+        )
+        st.download_button(
+            "Download PDF",
+            data=_build_export_pdf(export_md),
+            file_name="support_copilot_reply.pdf",
+            mime="application/pdf",
+        )
+
+        with st.expander("Session history"):
+            history = _read_history()
+            if not history:
+                st.write("No history yet.")
+            for item in history[::-1]:
+                st.markdown(f"**{item.get('ts','')}** — {item.get('provider','')}")
+                st.markdown(f"- Ticket: {item.get('ticket_text','')[:200]}")
+                st.markdown(f"- Draft: {item.get('draft_reply','')[:200]}")

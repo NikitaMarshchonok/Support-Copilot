@@ -118,6 +118,42 @@ def _normalize_draft(value: Any) -> str:
     return str(value).strip()
 
 
+def _normalize_whitespace(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _normalize_draft_text(text: str) -> str:
+    lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines()]
+    cleaned: list[str] = []
+    for line in lines:
+        if line:
+            cleaned.append(line)
+        elif cleaned and cleaned[-1] != "":
+            cleaned.append("")
+    return "\n".join(cleaned).strip()
+
+
+def _clean_sentence_list(items: list[Any], max_items: int, max_len: int = 160) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for it in items:
+        s = _normalize_whitespace(str(it))
+        if not s:
+            continue
+        if len(s) > max_len:
+            s = s[: max_len - 1] + "…"
+        key = s.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        if s[0].islower():
+            s = s[0].upper() + s[1:]
+        out.append(s)
+        if len(out) >= max_items:
+            break
+    return out
+
+
 def _clean_snippet(text: str, limit: int = 260) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     cleaned: list[str] = []
@@ -283,11 +319,15 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         if not clarifying:
             clarifying = ["Booking ID?", "Exact dates?", "Desired outcome?"]
 
+        draft = _normalize_draft_text(draft)
+        next_actions = _clean_sentence_list(_normalize_actions(next_actions), max_items=8)
+        clarifying = _clean_sentence_list(_normalize_actions(clarifying), max_items=6)
+
         return SuggestReplyResponse(
             draft_reply=draft,
             citations=citations,
-            next_actions=_normalize_actions(next_actions)[:8],
-            clarifying_questions=_normalize_actions(clarifying)[:6],
+            next_actions=next_actions,
+            clarifying_questions=clarifying,
             confidence=conf,
             language=lang,
             debug={
@@ -347,11 +387,15 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
     if not citations:
         conf = min(conf, 0.35)
 
+    draft = _normalize_draft_text(parsed.draft_reply)
+    next_actions = _clean_sentence_list(parsed.next_actions, max_items=8)
+    clarifying = _clean_sentence_list(parsed.clarifying_questions, max_items=6)
+
     return SuggestReplyResponse(
-        draft_reply=parsed.draft_reply.strip(),
+        draft_reply=draft,
         citations=citations,
-        next_actions=[a.strip() for a in parsed.next_actions if str(a).strip()][:8],
-        clarifying_questions=[q.strip() for q in parsed.clarifying_questions if str(q).strip()][:6],
+        next_actions=next_actions,
+        clarifying_questions=clarifying,
         confidence=conf,
         language=parsed.language or language,
         debug={"top_score": top_score, "mode": "openai", "model": settings.openai_model},

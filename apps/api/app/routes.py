@@ -27,7 +27,31 @@ def health():
 
 @router.post("/suggest-reply", response_model=SuggestReplyResponse)
 def suggest_reply(req: SuggestReplyRequest):
-    return generate_suggested_reply(req.ticket_text, language=req.language, category=req.category)
+    resp = generate_suggested_reply(req.ticket_text, language=req.language, category=req.category)
+    _log_history(req, resp)
+    return resp
+
+
+def _log_history(req: SuggestReplyRequest, resp: SuggestReplyResponse) -> None:
+    try:
+        Path("data/history").mkdir(parents=True, exist_ok=True)
+        payload = resp.model_dump()
+        row = {
+            "ts": datetime.utcnow().isoformat() + "Z",
+            "ticket_text": (req.ticket_text or "")[:4000],
+            "language": req.language,
+            "category": req.category,
+            "draft_reply": (payload.get("draft_reply") or "")[:4000],
+            "next_actions": payload.get("next_actions") or [],
+            "clarifying_questions": payload.get("clarifying_questions") or [],
+            "citations": (payload.get("citations") or [])[:4],
+            "provider": (payload.get("debug") or {}).get("mode"),
+            "model": (payload.get("debug") or {}).get("model"),
+        }
+        with open("data/history/history.jsonl", "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
 
 
 @router.post("/feedback")
