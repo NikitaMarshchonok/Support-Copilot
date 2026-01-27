@@ -145,12 +145,15 @@ def _read_history(limit: int = 8) -> list[dict]:
 col1, col2 = st.columns([1, 1])
 
 with col1:
+    demo_mode = st.checkbox("Demo mode (auto-fill + auto-generate)", value=False)
     demo_name = st.selectbox("Demo scenarios", ["(none)"] + list(DEMO_SCENARIOS.keys()))
     if st.button("Load scenario", disabled=(demo_name == "(none)")):
         demo = DEMO_SCENARIOS[demo_name]
         st.session_state["ticket_text"] = demo["ticket_text"]
         st.session_state["language"] = demo["language"]
         st.session_state["category"] = demo["category"]
+        if demo_mode:
+            st.session_state["auto_generate"] = True
 
     ticket_text = st.text_area(
         "Ticket text",
@@ -161,6 +164,16 @@ with col1:
     language = st.selectbox("Language", ["en", "ru", "he"], index=0, key="language")
     category = st.text_input("Category (optional)", value="", key="category")
     if st.button("Generate", type="primary", disabled=(len(ticket_text.strip()) < 3)):
+        with st.spinner("Thinking..."):
+            r = requests.post(
+                f"{API_URL}/suggest-reply",
+                json={"ticket_text": ticket_text, "language": language, "category": category or None},
+                timeout=60,
+            )
+        st.session_state["last_ticket"] = ticket_text
+        st.session_state["resp"] = r.json()
+
+    if st.session_state.pop("auto_generate", False) and len(ticket_text.strip()) >= 3:
         with st.spinner("Thinking..."):
             r = requests.post(
                 f"{API_URL}/suggest-reply",
@@ -230,7 +243,14 @@ with col2:
             history = _read_history()
             if not history:
                 st.write("No history yet.")
-            for item in history[::-1]:
-                st.markdown(f"**{item.get('ts','')}** — {item.get('provider','')}")
-                st.markdown(f"- Ticket: {item.get('ticket_text','')[:200]}")
-                st.markdown(f"- Draft: {item.get('draft_reply','')[:200]}")
+            else:
+                rows = [
+                    {
+                        "ts": item.get("ts", ""),
+                        "provider": item.get("provider", ""),
+                        "ticket": (item.get("ticket_text", "")[:120]),
+                        "draft": (item.get("draft_reply", "")[:120]),
+                    }
+                    for item in history[::-1]
+                ]
+                st.dataframe(rows, use_container_width=True, hide_index=True)

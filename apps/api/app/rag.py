@@ -256,7 +256,11 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
             debug={"top_score": top_score, "min_score": settings.min_score},
         )
 
-    hits_payloads = [h.payload for h in raw_hits]
+    score_cutoff = max(settings.min_score, top_score - 0.15)
+    filtered_hits = [h for h in raw_hits if h.score >= score_cutoff]
+    if not filtered_hits:
+        filtered_hits = raw_hits[:4]
+    hits_payloads = [h.payload for h in filtered_hits]
     citations: list[Citation] = []
     for p in hits_payloads[:4]:
         text = (p.get("text") or "").strip()
