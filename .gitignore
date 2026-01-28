@@ -6,3 +6,5 @@ __pycache__/
 data/feedback/*.jsonl
 .ipynb_checkpoints/
 data/history/*.jsonl
+data/metrics/*.jsonl
+ мне 

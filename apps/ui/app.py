@@ -40,6 +40,36 @@ DEMO_SCENARIOS = {
     },
 }
 
+CUSTOM_PRESETS_PATH = Path("data/demo_presets.json")
+DEMO_SCRIPT_PATH = Path("DEMO_SCRIPT.md")
+
+
+def _load_custom_presets() -> dict:
+    if not CUSTOM_PRESETS_PATH.exists():
+        return {}
+    try:
+        data = json.loads(CUSTOM_PRESETS_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    presets = {}
+    if isinstance(data, list):
+        for item in data:
+            if isinstance(item, dict) and item.get("name") and item.get("ticket_text"):
+                presets[item["name"]] = {
+                    "ticket_text": item.get("ticket_text", ""),
+                    "language": item.get("language", "en"),
+                    "category": item.get("category", ""),
+                }
+    elif isinstance(data, dict):
+        for name, payload in data.items():
+            if isinstance(payload, dict) and payload.get("ticket_text"):
+                presets[name] = {
+                    "ticket_text": payload.get("ticket_text", ""),
+                    "language": payload.get("language", "en"),
+                    "category": payload.get("category", ""),
+                }
+    return presets
+
 
 def _build_export_markdown(resp: dict) -> str:
     citations = resp.get("citations", [])
@@ -142,13 +172,40 @@ def _read_history(limit: int = 8) -> list[dict]:
             continue
     return rows
 
+
+def _read_metrics(limit: int = 200) -> list[dict]:
+    path = Path("data/metrics/metrics.jsonl")
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
+def _summarize_metrics(rows: list[dict]) -> dict:
+    if not rows:
+        return {}
+    count = len(rows)
+    avg_conf = sum(float(r.get("confidence") or 0.0) for r in rows) / count
+    avg_ms = sum(int(r.get("duration_ms") or 0) for r in rows) / count
+    providers = {}
+    for r in rows:
+        providers[r.get("provider") or "unknown"] = providers.get(r.get("provider") or "unknown", 0) + 1
+    return {"count": count, "avg_conf": avg_conf, "avg_ms": avg_ms, "providers": providers}
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
+    custom_presets = _load_custom_presets()
+    all_presets = {**DEMO_SCENARIOS, **custom_presets}
     demo_mode = st.checkbox("Demo mode (auto-fill + auto-generate)", value=False)
-    demo_name = st.selectbox("Demo scenarios", ["(none)"] + list(DEMO_SCENARIOS.keys()))
+    demo_name = st.selectbox("Demo scenarios", ["(none)"] + list(all_presets.keys()))
     if st.button("Load scenario", disabled=(demo_name == "(none)")):
-        demo = DEMO_SCENARIOS[demo_name]
+        demo = all_presets[demo_name]
         st.session_state["ticket_text"] = demo["ticket_text"]
         st.session_state["language"] = demo["language"]
         st.session_state["category"] = demo["category"]
@@ -254,3 +311,22 @@ with col2:
                     for item in history[::-1]
                 ]
                 st.dataframe(rows, use_container_width=True, hide_index=True)
+
+        with st.expander("Metrics"):
+            metrics_rows = _read_metrics()
+            if not metrics_rows:
+                st.write("No metrics yet.")
+            else:
+                summary = _summarize_metrics(metrics_rows)
+                st.markdown(
+                    f"- Requests: **{summary.get('count', 0)}**  \n"
+                    f"- Avg latency: **{summary.get('avg_ms', 0):.0f} ms**  \n"
+                    f"- Avg confidence: **{summary.get('avg_conf', 0):.2f}**"
+                )
+                st.write("Providers:", summary.get("providers", {}))
+
+        with st.expander("Demo script"):
+            if DEMO_SCRIPT_PATH.exists():
+                st.markdown(DEMO_SCRIPT_PATH.read_text(encoding="utf-8"))
+            else:
+                st.write("Add `DEMO_SCRIPT.md` to show the demo script here.")

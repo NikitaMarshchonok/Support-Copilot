@@ -41,6 +41,7 @@ curl -X POST http://localhost:8000/suggest-reply \
 - Экспорт результата: **Download Markdown** / **Download PDF**
 - История запросов пишется в `data/history/history.jsonl`
 - Скрипт демо‑презентации: `DEMO_SCRIPT.md`
+- Кастомные пресеты: скопируйте `data/demo_presets.example.json` → `data/demo_presets.json`
 
 ## Структура
 ```

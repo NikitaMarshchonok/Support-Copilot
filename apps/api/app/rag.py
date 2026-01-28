@@ -154,6 +154,25 @@ def _clean_sentence_list(items: list[Any], max_items: int, max_len: int = 160) -
     return out
 
 
+def _tokenize(text: str) -> set[str]:
+    return {t for t in re.findall(r"[a-z0-9]{3,}", text.lower())}
+
+
+def _rerank_hits(raw_hits: list[Any], ticket_text: str) -> list[Any]:
+    query_terms = _tokenize(ticket_text)
+    if not query_terms:
+        return raw_hits
+
+    def score_hit(h: Any) -> tuple[float, float]:
+        payload = getattr(h, "payload", {}) or {}
+        text = f"{payload.get('title','')} {payload.get('text','')}"
+        doc_terms = _tokenize(text)
+        overlap = len(query_terms & doc_terms)
+        return (float(overlap), float(getattr(h, "score", 0.0)))
+
+    return sorted(raw_hits, key=score_hit, reverse=True)
+
+
 def _clean_snippet(text: str, limit: int = 260) -> str:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     cleaned: list[str] = []
@@ -237,7 +256,8 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
             language=language,
         )
 
-    top_score = raw_hits[0].score
+    ranked_hits = _rerank_hits(raw_hits, ticket_text)
+    top_score = ranked_hits[0].score
     conf = _confidence_from_score(top_score)
 
     # Guardrail: if score too low -> no LLM call
@@ -257,9 +277,9 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         )
 
     score_cutoff = max(settings.min_score, top_score - 0.15)
-    filtered_hits = [h for h in raw_hits if h.score >= score_cutoff]
+    filtered_hits = [h for h in ranked_hits if h.score >= score_cutoff]
     if not filtered_hits:
-        filtered_hits = raw_hits[:4]
+        filtered_hits = ranked_hits[:4]
     hits_payloads = [h.payload for h in filtered_hits]
     citations: list[Citation] = []
     for p in hits_payloads[:4]:
