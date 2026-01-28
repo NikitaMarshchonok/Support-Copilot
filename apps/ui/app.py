@@ -205,10 +205,17 @@ def _summarize_metrics(rows: list[dict]) -> dict:
     count = len(rows)
     avg_conf = sum(float(r.get("confidence") or 0.0) for r in rows) / count
     avg_ms = sum(int(r.get("duration_ms") or 0) for r in rows) / count
+    low_conf = sum(1 for r in rows if r.get("low_confidence"))
     providers = {}
     for r in rows:
         providers[r.get("provider") or "unknown"] = providers.get(r.get("provider") or "unknown", 0) + 1
-    return {"count": count, "avg_conf": avg_conf, "avg_ms": avg_ms, "providers": providers}
+    return {
+        "count": count,
+        "avg_conf": avg_conf,
+        "avg_ms": avg_ms,
+        "low_conf_rate": low_conf / count,
+        "providers": providers,
+    }
 
 col1, col2 = st.columns([1, 1])
 
@@ -256,6 +263,8 @@ with col1:
 with col2:
     resp = st.session_state.get("resp")
     if resp:
+        if resp.get("low_confidence"):
+            st.warning("Low confidence — asking clarifying questions before answering.")
         st.subheader("Draft reply")
         st.write(resp.get("draft_reply", ""))
 
@@ -345,7 +354,8 @@ with col2:
                 st.markdown(
                     f"- Requests: **{summary.get('count', 0)}**  \n"
                     f"- Avg latency: **{summary.get('avg_ms', 0):.0f} ms**  \n"
-                    f"- Avg confidence: **{summary.get('avg_conf', 0):.2f}**"
+                    f"- Avg confidence: **{summary.get('avg_conf', 0):.2f}**  \n"
+                    f"- Low confidence rate: **{summary.get('low_conf_rate', 0):.0%}**"
                 )
                 st.write("Providers:", summary.get("providers", {}))
 

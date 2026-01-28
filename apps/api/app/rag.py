@@ -208,6 +208,31 @@ def _confidence_from_score(score: float) -> float:
     return float(max(0.0, min(1.0, (score - 0.20) / 0.40)))
 
 
+def _apply_low_confidence_gate(resp: SuggestReplyResponse, language: str) -> SuggestReplyResponse:
+    if not resp.low_confidence:
+        return resp
+    if language == "ru":
+        draft = (
+            "Похоже, данных недостаточно, чтобы уверенно применить нужную политику. "
+            "Пожалуйста, уточните детали бронирования и желаемый результат."
+        )
+    else:
+        draft = (
+            "I’m not fully confident which policy applies. "
+            "Please share the booking ID, exact dates, and what outcome you want."
+        )
+    return SuggestReplyResponse(
+        draft_reply=draft,
+        citations=[],
+        next_actions=["Ask clarifying questions", "Verify booking details"],
+        clarifying_questions=["Booking ID?", "Exact dates?", "Desired outcome?"],
+        confidence=resp.confidence,
+        low_confidence=True,
+        language=language,
+        debug=resp.debug,
+    )
+
+
 def _build_sources_block(hits: list[dict[str, Any]]) -> str:
     lines = []
     for i, h in enumerate(hits, start=1):
@@ -284,7 +309,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
 
     # Guardrail: if score too low -> no LLM call
     if top_score < settings.min_score:
-        return SuggestReplyResponse(
+        resp = SuggestReplyResponse(
             draft_reply=(
                 "I’m not confident which policy applies. Please уточните детали (booking ID, даты, что именно нужно)."
                 if language == "ru"
@@ -294,9 +319,11 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
             next_actions=["Ask clarifying questions", "If needed, escalate to L2"],
             clarifying_questions=["Booking ID?", "Exact dates?", "Cancel/change/refund?"],
             confidence=conf,
+            low_confidence=True,
             language=language,
             debug={"top_score": top_score, "min_score": settings.min_score, "sources": debug_sources},
         )
+        return resp
 
     score_cutoff = max(settings.min_score, top_score - 0.15)
     filtered_hits = [h for h in ranked_hits if h.score >= score_cutoff]
@@ -369,12 +396,13 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         next_actions = _clean_sentence_list(_normalize_actions(next_actions), max_items=8)
         clarifying = _clean_sentence_list(_normalize_actions(clarifying), max_items=6)
 
-        return SuggestReplyResponse(
+        resp = SuggestReplyResponse(
             draft_reply=draft,
             citations=citations,
             next_actions=next_actions,
             clarifying_questions=clarifying,
             confidence=conf,
+            low_confidence=conf < settings.low_confidence_threshold,
             language=lang,
             debug={
                 "top_score": top_score,
@@ -383,6 +411,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
                 "sources": debug_sources,
             },
         )
+        return _apply_low_confidence_gate(resp, language=lang)
 
     sys = (
         "You are a Customer Support Copilot for a travel booking platform.\n"
@@ -438,12 +467,14 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
     next_actions = _clean_sentence_list(parsed.next_actions, max_items=8)
     clarifying = _clean_sentence_list(parsed.clarifying_questions, max_items=6)
 
-    return SuggestReplyResponse(
+    resp = SuggestReplyResponse(
         draft_reply=draft,
         citations=citations,
         next_actions=next_actions,
         clarifying_questions=clarifying,
         confidence=conf,
+        low_confidence=conf < settings.low_confidence_threshold,
         language=parsed.language or language,
         debug={"top_score": top_score, "mode": "openai", "model": settings.openai_model, "sources": debug_sources},
     )
+    return _apply_low_confidence_gate(resp, language=parsed.language or language)

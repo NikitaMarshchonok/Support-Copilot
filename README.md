@@ -71,3 +71,4 @@ data/kb          # knowledge base (создается при ingest)
    - `ollama pull llama3.1`
    - `ollama pull nomic-embed-text`
  - Без моделей (mock): `LLM_PROVIDER=mock` (генерация без LLM)
+- Low‑confidence режим настраивается через `LOW_CONFIDENCE_THRESHOLD`

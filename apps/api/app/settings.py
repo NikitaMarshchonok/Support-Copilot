@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     # Retrieval
     top_k: int = Field(default=5, validation_alias="TOP_K")
     min_score: float = Field(default=0.22, validation_alias="MIN_SCORE")
+    low_confidence_threshold: float = Field(default=0.45, validation_alias="LOW_CONFIDENCE_THRESHOLD")
 
     # Chunking
     chunk_size: int = Field(default=900, validation_alias="CHUNK_SIZE")

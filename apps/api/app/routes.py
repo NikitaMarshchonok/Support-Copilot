@@ -69,6 +69,7 @@ def _log_metrics(req: SuggestReplyRequest, resp: SuggestReplyResponse, started: 
             "provider": (payload.get("debug") or {}).get("mode"),
             "model": (payload.get("debug") or {}).get("model"),
             "confidence": payload.get("confidence"),
+            "low_confidence": payload.get("low_confidence"),
             "language": payload.get("language"),
             "category": req.category,
             "citations_count": len(payload.get("citations") or []),

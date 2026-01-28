@@ -21,6 +21,7 @@ class SuggestReplyResponse(BaseModel):
     next_actions: list[str]
     clarifying_questions: list[str] = []
     confidence: float = Field(ge=0.0, le=1.0)
+    low_confidence: bool = False
     language: str
     debug: dict | None = None
 
