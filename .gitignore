@@ -8,4 +8,5 @@ data/feedback/*.jsonl
 data/history/*.jsonl
 data/metrics/*.jsonl
 data/eval/results.jsonl
+data/eval/results.summary.json
  мне 
