@@ -54,6 +54,7 @@ python scripts/eval_rag.py --no-llm
 ```
 Кейсы лежат в `data/eval/cases.jsonl`, результаты пишутся в `data/eval/results.jsonl`.
 Итоговая сводка сохраняется в `data/eval/results.summary.json`.
+В UI есть блок **RAG eval** с краткой сводкой и последними кейсами.
 
 ## Структура
 ```

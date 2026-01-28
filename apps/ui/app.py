@@ -199,6 +199,29 @@ def _read_metrics(limit: int = 200) -> list[dict]:
     return rows
 
 
+def _read_eval_summary() -> dict:
+    path = Path("data/eval/results.summary.json")
+    if not path.exists():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _read_eval_results(limit: int = 20) -> list[dict]:
+    path = Path("data/eval/results.jsonl")
+    if not path.exists():
+        return []
+    rows: list[dict] = []
+    for line in path.read_text(encoding="utf-8").splitlines()[-limit:]:
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return rows
+
+
 def _summarize_metrics(rows: list[dict]) -> dict:
     if not rows:
         return {}
@@ -358,6 +381,34 @@ with col2:
                     f"- Low confidence rate: **{summary.get('low_conf_rate', 0):.0%}**"
                 )
                 st.write("Providers:", summary.get("providers", {}))
+
+        with st.expander("RAG eval"):
+            summary = _read_eval_summary()
+            results = _read_eval_results()
+            if not summary and not results:
+                st.write("Run `python scripts/eval_rag.py` to generate eval reports.")
+            if summary:
+                st.markdown(
+                    f"- Total: **{summary.get('total', 0)}**  \n"
+                    f"- Pass rate: **{summary.get('pass_rate', 0):.0%}**  \n"
+                    f"- P@1 / P@3 / P@5: "
+                    f"**{summary.get('precision_at_1', 0):.2f}** / "
+                    f"**{summary.get('precision_at_3', 0):.2f}** / "
+                    f"**{summary.get('precision_at_5', 0):.2f}**"
+                )
+            if results:
+                rows = [
+                    {
+                        "id": r.get("id"),
+                        "passed": r.get("passed"),
+                        "retrieval_hit": r.get("retrieval_hit"),
+                        "citation_hit": r.get("citation_hit"),
+                        "precision_at_1": r.get("precision_at_1"),
+                        "confidence": r.get("confidence"),
+                    }
+                    for r in results[::-1]
+                ]
+                st.dataframe(rows, use_container_width=True, hide_index=True)
 
         with st.expander("Demo script"):
             if DEMO_SCRIPT_PATH.exists():
