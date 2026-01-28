@@ -43,6 +43,16 @@ curl -X POST http://localhost:8000/suggest-reply \
 - Скрипт демо‑презентации: `DEMO_SCRIPT.md`
 - Кастомные пресеты: скопируйте `data/demo_presets.example.json` → `data/demo_presets.json`
 
+## RAG eval (качество)
+```bash
+# Запуск базовой оценки (retrieval + generation)
+python scripts/eval_rag.py
+
+# Только retrieval (без LLM)
+python scripts/eval_rag.py --no-llm
+```
+Кейсы лежат в `data/eval/cases.jsonl`, результаты пишутся в `data/eval/results.jsonl`.
+
 ## Структура
 ```
 apps/api/app     # FastAPI + RAG

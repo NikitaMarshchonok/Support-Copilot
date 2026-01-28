@@ -7,4 +7,5 @@ data/feedback/*.jsonl
 .ipynb_checkpoints/
 data/history/*.jsonl
 data/metrics/*.jsonl
+data/eval/results.jsonl
  мне 
