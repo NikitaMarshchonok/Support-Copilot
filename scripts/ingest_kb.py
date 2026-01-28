@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import random
 import sys
 import uuid
 from pathlib import Path
+from datetime import datetime, timezone
 
 from openai import OpenAI
 from qdrant_client.http import models as qm
@@ -143,10 +145,13 @@ def main():
                     qdrant.delete_collection(collection_name=settings.qdrant_collection)
                 ensure_collection(qdrant, settings.qdrant_collection, vector_size=sample_emb_dim)
 
+            rel = path.relative_to(kb_root)
+            section = rel.parts[0] if len(rel.parts) > 1 else "root"
             payload = {
                 "title": path.stem.replace("_", " ").title(),
                 "url": None,
                 "source_path": str(path),
+                "section": section,
                 "chunk_index": idx,
                 "text": ch,
             }
@@ -163,7 +168,28 @@ def main():
     for i in range(0, len(points), B):
         qdrant.upsert(collection_name=settings.qdrant_collection, points=points[i:i+B])
 
+    version = _kb_version(md_files)
+    Path("data/kb_version.json").write_text(
+        json.dumps(
+            {
+                "version": version,
+                "files": len(md_files),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print(f"✅ Ingested {len(points)} chunks into collection '{settings.qdrant_collection}'")
+
+
+def _kb_version(files: list[Path]) -> str:
+    hasher = hashlib.sha1()
+    for path in sorted(files):
+        hasher.update(str(path).encode("utf-8"))
+        hasher.update(path.read_bytes())
+    return hasher.hexdigest()
 
 
 if __name__ == "__main__":

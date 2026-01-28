@@ -18,11 +18,13 @@ router = APIRouter()
 @router.get("/health")
 def health():
     provider, model = get_active_provider_model()
+    kb_version = _read_kb_version()
     return {
         "status": "ok",
         "collection": settings.qdrant_collection,
         "provider": provider,
         "model": model,
+        "kb_version": kb_version,
     }
 
 
@@ -75,6 +77,16 @@ def _log_metrics(req: SuggestReplyRequest, resp: SuggestReplyResponse, started: 
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
     except Exception:
         pass
+
+
+def _read_kb_version() -> dict | None:
+    path = Path("data/kb_version.json")
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
 
 
 @router.post("/feedback")

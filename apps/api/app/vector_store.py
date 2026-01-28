@@ -27,12 +27,24 @@ def ensure_collection(client: QdrantClient, collection: str, vector_size: int) -
     )
 
 
-def search(client: QdrantClient, collection: str, query_vector: list[float], limit: int) -> list[SearchHit]:
+def search(
+    client: QdrantClient,
+    collection: str,
+    query_vector: list[float],
+    limit: int,
+    section: str | None = None,
+) -> list[SearchHit]:
+    query_filter = None
+    if section:
+        query_filter = qm.Filter(
+            must=[qm.FieldCondition(key="section", match=qm.MatchValue(value=section))]
+        )
     results = client.search(
         collection_name=collection,
         query_vector=query_vector,
         limit=limit,
         with_payload=True,
+        query_filter=query_filter,
     )
     hits: list[SearchHit] = []
     for r in results:

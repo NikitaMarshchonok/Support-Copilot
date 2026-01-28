@@ -37,6 +37,7 @@ curl -X POST http://localhost:8000/suggest-reply \
 - В UI выберите **Demo scenarios → Load scenario**
 - Для авто‑генерации включите **Demo mode**
 - Нажмите **Generate** и покажите Draft reply + Citations + Next actions
+- Покажите **Policy preview** и статус KB в сайдбаре
 - Готовые тексты сценариев: `DEMO_PACK.md`
 - Экспорт результата: **Download Markdown** / **Download PDF**
 - История запросов пишется в `data/history/history.jsonl`

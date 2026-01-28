@@ -36,6 +36,19 @@ def _provider() -> str:
     return (settings.llm_provider or "openai").strip().lower()
 
 
+def _category_to_section(category: str | None) -> str | None:
+    if not category:
+        return None
+    cat = category.strip().lower()
+    if cat in {"policies", "policy"} or "cancel" in cat or "change" in cat:
+        return "policies"
+    if cat in {"payments", "payouts"} or "refund" in cat or "price" in cat:
+        return "payments"
+    if cat == "root":
+        return "root"
+    return None
+
+
 def get_active_provider_model() -> tuple[str, str | None]:
     provider = _provider()
     use_openai = provider == "openai" and _has_openai_key()
@@ -245,7 +258,8 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         emb = _mock_embedding(ticket_text)
 
     # 2) Retrieve
-    raw_hits = search(qdrant, settings.qdrant_collection, emb, limit=settings.top_k)
+    section = _category_to_section(category)
+    raw_hits = search(qdrant, settings.qdrant_collection, emb, limit=settings.top_k, section=section)
     if not raw_hits:
         return SuggestReplyResponse(
             draft_reply="I couldn’t find a relevant policy article. Please clarify the issue and share booking details.",
@@ -257,6 +271,14 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         )
 
     ranked_hits = _rerank_hits(raw_hits, ticket_text)
+    debug_sources = [
+        {
+            "title": str(h.payload.get("title") or ""),
+            "section": str(h.payload.get("section") or ""),
+            "score": float(h.score),
+        }
+        for h in ranked_hits[:5]
+    ]
     top_score = ranked_hits[0].score
     conf = _confidence_from_score(top_score)
 
@@ -273,7 +295,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
             clarifying_questions=["Booking ID?", "Exact dates?", "Cancel/change/refund?"],
             confidence=conf,
             language=language,
-            debug={"top_score": top_score, "min_score": settings.min_score},
+            debug={"top_score": top_score, "min_score": settings.min_score, "sources": debug_sources},
         )
 
     score_cutoff = max(settings.min_score, top_score - 0.15)
@@ -358,6 +380,7 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
                 "top_score": top_score,
                 "mode": "ollama" if use_ollama else "mock",
                 "model": settings.ollama_model if use_ollama else None,
+                "sources": debug_sources,
             },
         )
 
@@ -422,5 +445,5 @@ def generate_suggested_reply(ticket_text: str, language: str = "en", category: s
         clarifying_questions=clarifying,
         confidence=conf,
         language=parsed.language or language,
-        debug={"top_score": top_score, "mode": "openai", "model": settings.openai_model},
+        debug={"top_score": top_score, "mode": "openai", "model": settings.openai_model, "sources": debug_sources},
     )

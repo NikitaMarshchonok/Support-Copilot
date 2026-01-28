@@ -13,6 +13,19 @@ st.set_page_config(page_title="Support Copilot", layout="wide")
 st.title("🧠 Support Copilot (MVP)")
 st.caption("Ticket → Draft reply + citations (RAG) + next actions")
 
+with st.sidebar:
+    st.subheader("Status")
+    try:
+        health = requests.get(f"{API_URL}/health", timeout=2).json()
+        st.write(f"Provider: `{health.get('provider')}`")
+        st.write(f"Model: `{health.get('model')}`")
+        kb = health.get("kb_version") or {}
+        if kb:
+            st.write(f"KB files: `{kb.get('files')}`")
+            st.write(f"KB version: `{kb.get('version')}`")
+    except requests.RequestException:
+        st.write("API not reachable")
+
 DEMO_SCENARIOS = {
     "Refund within policy": {
         "ticket_text": (
@@ -252,6 +265,17 @@ with col2:
             if c.get("url"):
                 st.markdown(f"  - {c['url']}")
             st.markdown(f"  - _{c.get('snippet','')}_")
+
+        with st.expander("Policy preview"):
+            sources = (resp.get("debug") or {}).get("sources") or []
+            if not sources:
+                st.write("No preview available.")
+            else:
+                for s in sources:
+                    st.markdown(
+                        f"- **{s.get('title','')}** "
+                        f"(score: `{s.get('score', 0):.3f}`, section: `{s.get('section','')}`)"
+                    )
 
         st.subheader("Next actions")
         for a in resp.get("next_actions", []):
